@@ -38,9 +38,6 @@ Overwrite Behavior if an application exists in the cluster with the same name. A
 'Always' will remove the existing application even if its Application type and Version is different from the application being created. 
 'SameAppTypeAndVersion' will remove the existing application only if its Application type and Version is same as the application being created.
 
-.PARAMETER SkipPackageValidation
-Switch signaling whether the package should be validated or not before deployment.
-
 .PARAMETER SecurityToken
 A security token for authentication to cluster management endpoints. Used for silent authentication to clusters that are protected by Azure Active Directory.
 
@@ -87,9 +84,6 @@ Param
     [String]
     [ValidateSet('Never','Always','SameAppTypeAndVersion')]
     $OverwriteBehavior = 'Never',
-
-    [Switch]
-    $SkipPackageValidation,
 
     [String]
     $SecurityToken 
@@ -190,7 +184,13 @@ Import-Module "$ModuleFolderPath\ServiceFabricSDK.psm1"
 
 $IsUpgrade = ($publishProfile.UpgradeDeployment -and $publishProfile.UpgradeDeployment.Enabled -and $OverrideUpgradeBehavior -ne 'VetoUpgrade') -or $OverrideUpgradeBehavior -eq 'ForceUpgrade'
 
-if ($IsUpgrade)
+# check if this application exists or not
+$ManifestFilePath = "$ApplicationPackagePath\ApplicationManifest.xml"
+$manifestXml = [Xml] (Get-Content $ManifestFilePath)
+$AppTypeName = $manifestXml.ApplicationManifest.ApplicationTypeName
+$AppExists = (Get-ServiceFabricApplication | ? { $_.ApplicationTypeName -eq $AppTypeName }) -ne $null
+
+if ($IsUpgrade -and $AppExists)
 {
     $Action = "RegisterAndUpgrade"
     if ($DeployOnly)
@@ -216,5 +216,5 @@ else
         $Action = "Register"
     }
     
-    Publish-NewServiceFabricApplication -ApplicationPackagePath $ApplicationPackagePath -ApplicationParameterFilePath $publishProfile.ApplicationParameterFile -Action $Action -ApplicationParameter $ApplicationParameter -OverwriteBehavior $OverwriteBehavior -SkipPackageValidation:$SkipPackageValidation -ErrorAction Stop
+    Publish-NewServiceFabricApplication -ApplicationPackagePath $ApplicationPackagePath -ApplicationParameterFilePath $publishProfile.ApplicationParameterFile -Action $Action -ApplicationParameter $ApplicationParameter -OverwriteBehavior $OverwriteBehavior -ErrorAction Stop
 }
